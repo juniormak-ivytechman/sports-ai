@@ -10,6 +10,9 @@ from app.football_api import get_todays_matches, get_recent_matchday
 load_dotenv(dotenv_path="../.env")
 
 app = FastAPI(title="Sports AI", version="1.0.0")
+@app.get("/")
+def root():
+    return {"message": "Sports AI API is running. Try /health or /predict?home=Arsenal&away=Chelsea"}
 
 # Allow the Next.js dev server to call us
 app.add_middleware(
