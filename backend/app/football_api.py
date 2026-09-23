@@ -41,12 +41,18 @@ def get_todays_matches():
 
     matches = []
     for m in data.get("matches", []):
+        # Only include matches that haven't finished yet
+        status = m.get("status", "")
+        if status in ("FINISHED", "POSTPONED", "CANCELLED", "SUSPENDED"):
+            continue
         matches.append({
             "id": m["id"],
             "utcDate": m["utcDate"],
             "homeTeam": m["homeTeam"]["name"],
             "awayTeam": m["awayTeam"]["name"],
-            "status": m["status"],
+            "status": status,
+            "homeCrest": m["homeTeam"].get("crest", ""),
+            "awayCrest": m["awayTeam"].get("crest", ""),
         })
     return matches
 
