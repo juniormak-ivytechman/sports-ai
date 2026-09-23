@@ -1,0 +1,50 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.pytest_cache/
+
+# Environment — DO NOT COMMIT
+.env
+.env.local
+.env.*.local
+
+# Node
+node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+*.tsbuildinfo
+next-env.d.ts
+
+# OS junk
+.DS_Store
+._*
+
+# DuckDB database (regenerated)
+database/*.duckdb
+
+# Generated prediction outputs
+data/*_predictions*.csv
+data/*_2025_26.csv
+data/*_1x2_*.csv
+data/model_vs_market_*.csv
+data/poisson_baseline_*.csv
+data/time_decay_*.csv
+data/home_away_*.csv
+data/ensemble_*.csv
+data/market_predictions_*.csv
+data/elo_1x2_*.csv
+
+# Old README
+README_old.md
+
+# Notebooks
+notebooks/.ipynb_checkpoints/
+
+# Logs
+*.log

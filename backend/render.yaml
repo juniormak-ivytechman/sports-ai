@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: sports-ai-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: FOOTBALL_DATA_TOKEN
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.13.0"
