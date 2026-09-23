@@ -3,6 +3,9 @@ from datetime import date
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from app.model import PoissonModel
+from app.football_api import get_todays_matches, get_recent_matchday, get_injuries
+from app.llm import explain_prediction
 
 from app.model import PoissonModel
 from app.football_api import get_todays_matches, get_recent_matchday
@@ -85,3 +88,26 @@ def predict(home: str, away: str):
 @app.get("/teams")
 def teams():
     return {"teams": sorted(model.t2i.keys())}
+@app.get("/explain")
+def explain(home: str, away: str):
+    """Return model prediction + LLM-generated plain-English explanation."""
+    prediction = model.predict(home, away)
+    if prediction is None:
+        raise HTTPException(status_code=404, detail="Teams not recognised")
+
+    # Optional: fetch injuries (silently returns [] if key not set)
+    home_injuries = get_injuries(home)
+    away_injuries = get_injuries(away)
+
+    explanation = explain_prediction(
+        prediction,
+        home_injuries=home_injuries,
+        away_injuries=away_injuries,
+    )
+
+    return {
+        "prediction": prediction,
+        "explanation": explanation,
+        "homeInjuries": home_injuries,
+        "awayInjuries": away_injuries,
+    }

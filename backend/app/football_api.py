@@ -111,3 +111,52 @@ def get_recent_matchday(days_back=14):
         "awayTeam": m["awayTeam"]["name"],
         "status": m["status"],
     } for m in latest_matches]
+API_FOOTBALL_KEY = os.getenv("API_FOOTBALL_KEY", "").strip()
+API_FOOTBALL_BASE = "https://v3.football.api-sports.io"
+
+
+def get_injuries(team_name: str, season: int = 2026):
+    """Fetch current injuries/suspensions for a team from API-Football.
+
+    Returns a list of short strings. Empty list if key missing or team not found.
+    """
+    if not API_FOOTBALL_KEY:
+        return []
+
+    # API-Football uses its own team ID system. Search by name first.
+    headers = {"x-apisports-key": API_FOOTBALL_KEY}
+
+    try:
+        # Search for the team
+        r = requests.get(
+            f"{API_FOOTBALL_BASE}/teams",
+            params={"search": team_name},
+            headers=headers,
+            timeout=10,
+        )
+        r.raise_for_status()
+        teams = r.json().get("response", [])
+        if not teams:
+            return []
+        team_id = teams[0]["team"]["id"]
+
+        # Fetch injuries for this season
+        r = requests.get(
+            f"{API_FOOTBALL_BASE}/injuries",
+            params={"team": team_id, "season": season},
+            headers=headers,
+            timeout=10,
+        )
+        r.raise_for_status()
+        injuries = r.json().get("response", [])
+    except Exception as e:
+        print(f"[football_api] injuries error for {team_name}: {e}")
+        return []
+
+    out = []
+    for inj in injuries[:8]:
+        player = inj.get("player", {}).get("name", "Unknown")
+        reason = inj.get("player", {}).get("reason", "injury")
+        fixture = inj.get("fixture", {}).get("date", "")[:10]
+        out.append(f"{player} ({reason}, since {fixture})")
+    return out
