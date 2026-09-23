@@ -50,3 +50,14 @@ export async function fetchTeams(): Promise<string[]> {
   const r = await axios.get(`${API_BASE}/teams`);
   return r.data.teams;
 }
+export interface ExplainResponse {
+  prediction: MarketCard;
+  explanation: string;
+  homeInjuries: string[];
+  awayInjuries: string[];
+}
+
+export async function fetchExplanation(home: string, away: string): Promise<ExplainResponse> {
+  const r = await axios.get(`${API_BASE}/explain`, { params: { home, away } });
+  return r.data;
+}
