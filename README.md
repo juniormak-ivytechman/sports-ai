@@ -42,10 +42,10 @@ and defensible metrics matter more than chasing accuracy.
 ---
 
 ## Architecture
-┌─────────────────────────┐
+┌────────────────────────────────────────
 │ football-data.co.uk │ ← historical CSVs
 │ football-data.org │ ← live fixtures API
-└───────────┬─────────────┘
+└───────────┬───────────────────────────┘
 │
 ┌───────────▼─────────────┐
 │ Python data pipeline │
@@ -53,22 +53,22 @@ and defensible metrics matter more than chasing accuracy.
 │ feature engineering │
 └───────────┬─────────────┘
 │
-┌───────────▼─────────────┐
+┌───────────▼───────────────────────┐
 │ Poisson + Dixon-Coles │ ← the model
 │ (time-decay weighted) │
-└───────────┬─────────────┘
+└───────────┬───────────────────────┘
 │
-┌───────────▼─────────────┐
+┌───────────▼─────────────────────────┐
 │ FastAPI backend │ ← Render (free tier)
 │ /predict /explain │
 │ /fixtures/today /teams │
-└───────────┬─────────────┘
+└───────────┬─────────────────────────┘
 │
-┌───────────▼─────────────┐
+┌───────────▼──────────────────────────┐
 │ Next.js frontend │ ← Vercel (free tier)
 │ Today / Predict pages │
 │ Dark mode + LLM card │
-└─────────────────────────┘
+└──────────────────────────────────────┘
 
 
 
@@ -87,43 +87,6 @@ invents statistics or predictions.
 - Data: DuckDB, football-data.co.uk CSVs, football-data.org API
 
 ---
-
-## Repo layout
-sports-ai/
-├── data/ # raw season CSVs + master dataset
-│ ├── premier_league_1819.csv ... premier_league_2627.csv
-│ ├── premier_league_master.csv # canonical combined (3,090 matches)
-│ └── premier_league_features.csv # rolling point-in-time features
-├── database/
-│ └── setup_database.py # DuckDB schema + load
-├── backend/ # FastAPI service (deployed on Render)
-│ ├── app/
-│ │ ├── main.py # API routes
-│ │ ├── model.py # Poisson + Dixon-Coles fit/predict
-│ │ ├── football_api.py # football-data.org + API-Football
-│ │ └── llm.py # Groq explanation layer
-│ ├── requirements.txt
-│ └── render.yaml
-├── frontend/ # Next.js app (deployed on Vercel)
-│ ├── app/
-│ │ ├── layout.tsx # nav + dark mode bootstrap
-│ │ ├── page.tsx # Today page
-│ │ └── predict/page.tsx # Manual fixture predictor
-│ ├── components/
-│ │ ├── MarketCard.tsx # the market card UI
-│ │ └── ThemeToggle.tsx
-│ └── lib/api.ts # API client
-├── src/
-│ └── models/ # offline model experiments
-│ ├── poisson_model.py # static Poisson baseline
-│ ├── time_decay_poisson.py # time-decay + Dixon-Coles
-│ ├── market_predictions.py # all 9 markets from score matrix
-│ ├── simulate_live.py # holdout-of-N backtest
-│ ├── ensemble*.py # ensemble experiments
-│ └── value_dc_x2.py # value detection on DC X2
-├── services/ # early API test scripts
-└── README.md # this file
-
 
 ---
 
@@ -359,16 +322,6 @@ committed .env file.
 Frontend needs one env var on Vercel:
 
 NEXT_PUBLIC_API_URL=https://sports-ai-backend-dhr2.onrender.com
-Deployment
-
-Service	What	Plan	Notes
-GitHub	Source of truth	Free	Private repo
-Render	FastAPI backend	Free	Sleeps after 15 min idle — UptimeRobot keeps it warm
-Vercel	Next.js frontend	Free	Auto-deploys on push
-Groq	LLM	Free	gpt-oss-120b — 1,000 req/day
-UptimeRobot	Backend pinger	Free	5-min interval prevents Render sleep
-Auto-deploy flow: git push → Render and Vercel both detect the change
-and redeploy. No manual intervention.
 
 Known pitfalls
 
