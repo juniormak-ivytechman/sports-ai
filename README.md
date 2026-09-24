@@ -2,8 +2,11 @@
 
 A full-stack football analytics and prediction project. Builds statistical
 models of English Premier League matches from historical results and match
-statistics, evaluates them rigorously against bookmaker closing odds, and
-produces calibrated probability estimates for all major betting markets.
+statistics, evaluates them rigorously against bookmaker closing odds,
+produces calibrated probability estimates for all major betting markets,
+and serves them through a live web interface with LLM-powered explanations.
+
+**Live:** [sports-ai-bay.vercel.app](https://sports-ai-bay.vercel.app)
 
 **Read this file first.** It's the canonical summary of the project.
 
@@ -19,6 +22,10 @@ produces calibrated probability estimates for all major betting markets.
   margin-normalized implied probabilities.
 - Produces probabilities for **9 betting markets**: 1X2, Over 1.5, Over 2.5,
   Over 3.5, BTTS, Double Chance (1X, X2, 12), Draw No Bet, and Team to Score.
+- Serves predictions through a **FastAPI backend** and a **Next.js frontend**,
+  both deployed on free-tier hosting.
+- Adds **Groq LLM explanations** that describe the model's reasoning in
+  plain English, grounded strictly in the model's numbers.
 - **Honest result: the model does not beat the market.** Football-only
   signals derived from public data are already priced into closing odds.
   See "Results" and "What we learned" below.
@@ -34,49 +41,87 @@ and defensible metrics matter more than chasing accuracy.
 
 ---
 
+## Architecture
+┌─────────────────────────┐
+│ football-data.co.uk │ ← historical CSVs
+│ football-data.org │ ← live fixtures API
+└───────────┬─────────────┘
+│
+┌───────────▼─────────────┐
+│ Python data pipeline │
+│ combine / audit / │
+│ feature engineering │
+└───────────┬─────────────┘
+│
+┌───────────▼─────────────┐
+│ Poisson + Dixon-Coles │ ← the model
+│ (time-decay weighted) │
+└───────────┬─────────────┘
+│
+┌───────────▼─────────────┐
+│ FastAPI backend │ ← Render (free tier)
+│ /predict /explain │
+│ /fixtures/today /teams │
+└───────────┬─────────────┘
+│
+┌───────────▼─────────────┐
+│ Next.js frontend │ ← Vercel (free tier)
+│ Today / Predict pages │
+│ Dark mode + LLM card │
+└─────────────────────────┘
+
+
+
+The LLM is a **presentation layer, not a data layer.** The model produces
+the numbers; the LLM only writes prose about those numbers. It never
+invents statistics or predictions.
+
+---
+
 ## Environment
 
 - macOS, `~/Documents/sports-ai`, Python 3.13 virtual environment (`.venv`)
-- Libraries: `pandas`, `numpy`, `scipy`, `scikit-learn`, `duckdb`, `requests`
-- No git repo initialized yet (see "Suggested next steps")
+- Backend: `fastapi`, `uvicorn`, `pandas`, `numpy`, `scipy`,
+  `scikit-learn`, `groq`, `python-dotenv`
+- Frontend: Next.js 16, Tailwind CSS v4, TypeScript, `axios`
+- Data: DuckDB, football-data.co.uk CSVs, football-data.org API
 
 ---
 
 ## Repo layout
 sports-ai/
-├── data/ # raw season CSVs + master + model outputs
-│ ├── premier_league_1819.csv # raw, football-data.co.uk format
-│ ├── ...
-│ ├── premier_league_2526.csv
-│ ├── premier_league_master.csv # combined, canonical (3,040 matches)
-│ ├── premier_league_features.csv # rolling point-in-time features
-│ ├── premier_league_elo.csv # Elo ratings per match
-│ ├── market_predictions_2025_26.csv
-│ ├── ensemble_weighted_2025_26.csv
-│ └── ...
+├── data/ # raw season CSVs + master dataset
+│ ├── premier_league_1819.csv ... premier_league_2627.csv
+│ ├── premier_league_master.csv # canonical combined (3,090 matches)
+│ └── premier_league_features.csv # rolling point-in-time features
 ├── database/
-│ ├── setup_database.py
-│ └── sports_ai.duckdb
+│ └── setup_database.py # DuckDB schema + load
+├── backend/ # FastAPI service (deployed on Render)
+│ ├── app/
+│ │ ├── main.py # API routes
+│ │ ├── model.py # Poisson + Dixon-Coles fit/predict
+│ │ ├── football_api.py # football-data.org + API-Football
+│ │ └── llm.py # Groq explanation layer
+│ ├── requirements.txt
+│ └── render.yaml
+├── frontend/ # Next.js app (deployed on Vercel)
+│ ├── app/
+│ │ ├── layout.tsx # nav + dark mode bootstrap
+│ │ ├── page.tsx # Today page
+│ │ └── predict/page.tsx # Manual fixture predictor
+│ ├── components/
+│ │ ├── MarketCard.tsx # the market card UI
+│ │ └── ThemeToggle.tsx
+│ └── lib/api.ts # API client
 ├── src/
-│ ├── data/ # (scaffold, unused)
-│ ├── features/ # (scaffold, unused)
-│ ├── models/
-│ │ ├── poisson_model.py # static Poisson baseline
-│ │ ├── evaluate_poisson.py
-│ │ ├── time_decay_poisson.py # time-decay + Dixon-Coles
-│ │ ├── market_predictions.py # all 9 markets from Poisson
-│ │ ├── simulate_live.py # holdout-of-N live simulation
-│ │ ├── ensemble.py # equal-weight ensemble
-│ │ ├── ensemble_weighted.py # validation-tuned weights
-│ │ ├── ensemble_with_market.py # 4-way blend (includes market)
-│ │ └── value_dc_x2.py # value detection on DC X2
-│ ├── evaluation/ # (scaffold, unused)
-│ └── utils/ # (scaffold, unused)
-├── models/ # (early scaffold, superseded by src/models)
-├── services/
-│ └── football_data.py # TheSportsDB API test scripts
-├── notebooks/
-├── frontend/ # (to be built)
+│ └── models/ # offline model experiments
+│ ├── poisson_model.py # static Poisson baseline
+│ ├── time_decay_poisson.py # time-decay + Dixon-Coles
+│ ├── market_predictions.py # all 9 markets from score matrix
+│ ├── simulate_live.py # holdout-of-N backtest
+│ ├── ensemble*.py # ensemble experiments
+│ └── value_dc_x2.py # value detection on DC X2
+├── services/ # early API test scripts
 └── README.md # this file
 
 
@@ -86,13 +131,14 @@ sports-ai/
 
 ### Source
 
-Eight seasons of Premier League data from `football-data.co.uk`, covering
-2018/19 through 2025/26. Each season is a single CSV with results, match
-statistics (shots, shots on target, corners, cards), and bookmaker odds.
+Nine seasons of Premier League data from `football-data.co.uk`, covering
+2018/19 through 2026/27 (currently in progress). Each season is a single
+CSV with results, match statistics (shots, shots on target, corners, cards),
+and bookmaker odds.
 
 ### Canonical master file
 
-`data/premier_league_master.csv` is built by `combine_data.py` from the eight
+`data/premier_league_master.csv` is built by `combine_data.py` from the nine
 raw season files.
 
 **Two facts every downstream script must get right** — both were the source
@@ -102,104 +148,78 @@ of real bugs:
   the raw `%d/%m/%Y` format during the master rebuild, then re-saved as ISO).
   Parsing it with any other format string silently produces `NaT`.
 - `Season` is a **4-digit code taken from the filename**, e.g. `"2526"`,
-  `"2425"` — **not** `"2025/26"`.
+  `"2627"` — **not** `"2025/26"`.
 
-### Final master file
+### Current master
 
-- **3,040 matches**, 8 seasons
+- **3,090 matches**, 9 seasons
 - **0 duplicates**
-- **10 Aug 2018 – 24 May 2026**
+- **10 Aug 2018 – 20 Sep 2026**
 - **100% coverage** on core result/statistics fields
-- **~87.5% coverage** on bookmaker odds (`AvgH`, `AvgD`, `AvgA`)
-
-### Key columns
-
-| Column | Meaning |
-|---|---|
-| `Date` | ISO `%Y-%m-%d` |
-| `HomeTeam`, `AwayTeam` | Team names (football-data.co.uk convention) |
-| `FTHG`, `FTAG`, `FTR` | Full-time home/away goals and result (H/D/A) |
-| `HS`, `AS` | Home/away shots |
-| `HST`, `AST` | Home/away shots on target |
-| `HC`, `AC` | Home/away corners |
-| `AvgH`, `AvgD`, `AvgA` | Average bookmaker decimal odds (missing pre-2019/20) |
-| `Season` | 4-digit code e.g. `"2526"` |
+- **~87.7% coverage** on bookmaker odds (`AvgH`, `AvgD`, `AvgA`)
 
 ---
 
 ## Modelling protocol
 
-This split is used **consistently** across every model:
+This split is used **consistently** across every offline experiment:
 
 | Split | Date range | Purpose |
 |---|---|---|
 | **Development** | `Date < 2023-08-01` | Fit model parameters |
-| **Validation** | `2023-08-01 <= Date < 2025-08-01` | Tune hyperparameters (decay, K-factor, blend weights) |
-| **Final test** | `Date >= 2025-08-01` (2025/26 season, 380 matches) | Evaluated **exactly once**, never used for tuning |
+| **Validation** | `2023-08-01 <= Date < 2025-08-01` | Tune hyperparameters |
+| **Final test** | `Date >= 2025-08-01` | Evaluated **exactly once**, never used for tuning |
 
 **Hard rule:** never tune anything against the final test season. Enforced
-throughout the codebase.
+throughout the offline experiments.
 
 **Metrics:** accuracy for classification, log loss for probability quality,
 Brier score for calibration. Market benchmark uses margin-normalized
 `1/AvgH`, `1/AvgD`, `1/AvgA`.
 
+**For the deployed backend**, the model simply fits on all available data
+through today. No train/test split — the model is a live predictor, not
+being evaluated.
+
 ---
 
 ## Models
 
-### 1. Elo rating
+### 1. Elo rating (offline experiment only)
 
-Dynamic team strength. Starts every team at 1500. Updates after each match
-with `K=40`, home advantage `+40` (both tuned via grid search on validation).
-Converts Elo difference to 1X2 probabilities via empirical band-counting on
-historical matches with similar rating gaps (band width 75, min 50 matches).
+Dynamic team strength. Starts every team at 1500. Updates with `K=40`,
+home advantage `+40` (both tuned on validation). Converts Elo difference
+to 1X2 probabilities via empirical band-counting.
 
-**Walk-forward home-win accuracy** (binary H vs not-H):
+Walk-forward home-win accuracy: **61–67%** across 2022/23 through 2025/26.
 
-| Test season | Accuracy |
-|---|---:|
-| 2022/23 | 65.79% |
-| 2023/24 | 66.84% |
-| 2024/25 | 62.89% |
-| **2025/26 (final)** | **61.32%** |
-
-### 2. Time-decay Dixon-Coles Poisson
+### 2. Time-decay Dixon-Coles Poisson (**deployed model**)
 
 Per-team attack and defence parameters, fitted via maximum likelihood with:
-- **Exponential time decay** (`ξ = 0.003`, tuned on validation). A match
-  from 2 years ago gets ~0.11× the weight of a match from yesterday.
+- **Exponential time decay** (`ξ = 0.003`, tuned on validation).
 - **Dixon-Coles low-score correction** (`ρ` fitted per model — near zero
   in practice for this dataset).
 - **Regularisation** toward attack=1, defence=1.
 
-Produces a full score matrix (0–0 through 9–9), from which **9 markets** are
-derived. Home advantage: ~1.12–1.19 depending on training window.
+Produces a full score matrix (0–0 through 9–9) from which **9 markets**
+are derived. Home advantage: ~1.19.
 
-### 3. Logistic regression on engineered features
+### 3. Logistic regression on engineered features (offline experiment only)
 
 21 features: rolling 5-match form points, home/away-specific form, rolling
-goals scored/conceded, shots, shots on target, corners, plus all corresponding
-home-minus-away differences. Trained on `premier_league_features.csv`
-(built with strict point-in-time discipline — no future info).
+goals scored/conceded, shots, shots on target, corners, plus corresponding
+home-minus-away differences.
 
-### 4. Market probabilities (benchmark, not a model)
+### 4. LLM explanation layer (deployed)
 
-`1 / AvgH`, `1 / AvgD`, `1 / AvgA`, normalised to remove bookmaker margin.
-Serves as the benchmark that every model is compared against.
-
-### 5. Ensembles
-
-- **Equal-weight blend** of Elo + Poisson + ML on test: log loss 1.0294.
-- **Validation-tuned weights**: 0.75 Elo / 0.20 Poisson / 0.05 ML.
-  Validation log loss 0.9654, test log loss 1.0260.
-- **Four-way blend including market**: grid search assigns **100% weight to
-  the market**. The market alone is a better probability estimator than any
-  non-zero blend of the other three.
+Groq's `openai/gpt-oss-120b` model writes 3–4 sentence plain-English
+explanations of each prediction. The LLM receives structured facts from
+the model and is instructed to never invent statistics. Fallback model
+chain: `gpt-oss-120b` → `gpt-oss-20b` → `qwen/qwen3.6-27b`.
 
 ---
 
-## Results — 2025/26 final test (380 matches)
+## Results — 2025/26 final test (380 matches, offline experiments)
 
 ### 1X2 accuracy and log loss
 
@@ -218,9 +238,6 @@ failure — it is the correct, expected result.**
 
 ### Market accuracy — derived from Poisson score matrix
 
-Evaluated on 380 test matches. Base rate = "always predict the majority
-class for that market."
-
 | Market | Base rate | Model acc. | Verdict |
 |---|---:|---:|---|
 | Home Team to Score | 77.4% | 77.4% | tracks base rate |
@@ -237,27 +254,9 @@ class for that market."
 
 *The apparent DC X2 edge was investigated further — see below.
 
-### Confidence-tier accuracy
-
-Markets with high base rates produce high-confidence predictions that hit
-70–95%:
-
-| Market | Top 10% confidence (38 picks) | Top 25% (95 picks) |
-|---|---:|---:|
-| Home Team to Score | 92.1% | 94.7% |
-| Double Chance 1X | 89.5% | 87.4% |
-| Away Team to Score | 89.5% | 81.1% |
-| Double Chance X2 | 84.2% | 75.8% |
-| Over 1.5 | 81.6% | 84.2% |
-
-**These numbers are real but not edge.** They reflect that when the model
-is confident, the outcome is often genuinely high-probability. The market
-identifies the same matches.
-
 ### Value detection — the decisive test
 
-For Double Chance X2 (the one market where the model appeared to beat the
-base rate), we tested whether it beat the **market**:
+For Double Chance X2, we tested whether the model beat the **market**:
 
 | Threshold (model − market) | N picks | Model avg | Market avg | Actual | ROI |
 |---:|---:|---:|---:|---:|---:|
@@ -267,11 +266,7 @@ base rate), we tested whether it beat the **market**:
 | ≥ 15% | 24 | 0.621 | 0.422 | 0.292 | **−35.19%** |
 
 **At every threshold, the market was closer to the actual outcome than the
-model.** On the 24 matches where the model claimed the largest edge, it
-predicted 62.1% and actual was 29.2% — off by 33 percentage points. The
-market was off by 13.
-
-**Conclusion: the model has no exploitable edge over the closing line.**
+model.** Conclusion: the model has no exploitable edge over the closing line.
 
 ---
 
@@ -281,12 +276,12 @@ market was off by 13.
 |---|---|
 | **Time decay** on Poisson | ✅ Real improvement (log loss 1.0494 → 1.0404) |
 | **Dixon-Coles correction** | ➖ Flat (1.0405 → 1.0404). Not worth it. |
-| **Home/away split** (4 params per team) | ❌ Regression on validation (0.9897 → 1.0069) |
+| **Home/away split** (4 params per team) | ❌ Regression on validation |
 | **Equal-weight ensemble** | ✅ Small gain (1.0316 → 1.0294) |
 | **Weighted ensemble** | ✅ Small additional gain (1.0294 → 1.0260) |
 | **Adding market to blend** | ❌ Market takes 100% weight |
 | **Value betting on DC X2** | ❌ Negative ROI at every threshold |
-| **Elo 1X2 via polynomial mapping** | ❌ Overfit; worse than empirical band-counting |
+| **Elo 1X2 via polynomial mapping** | ❌ Overfit; worse than band-counting |
 | **Elo 1X2 via band-counting** | ✅ Best single non-market model (1.0274) |
 
 ---
@@ -303,52 +298,89 @@ market was off by 13.
    not beats, that number.
 
 3. **Confidence-filtered accuracy is real but not exploitable.** Top-10%
-   predictions hit 84–94% on several markets, but that's because the market
-   also assigns high confidence to those same matches.
+   predictions hit 84–94% on several markets, but the market also assigns
+   high confidence to those same matches.
 
 4. **Calibration is more important than accuracy.** Log loss exposed the
    failures (zero-draw prediction, home-bias) that accuracy alone hid.
 
-5. **The market is a hard benchmark, and that's fine.** A model that
-   matches the market on football-only data is a legitimate result. Beating
-   it requires information the model doesn't have.
+5. **The LLM cannot be a data layer.** It writes prose about numbers your
+   model has already produced. It does not know fixtures, injuries, or
+   current form. Feed it facts, or it invents them.
+
+6. **The market is a hard benchmark, and that's fine.** A model that
+   matches the market on football-only data is a legitimate result.
 
 ---
 
-## Known pitfalls
+## Running locally
 
-- **Do not paste large scripts into Terminal via `cat > file <<'PY' ... PY`.**
-  Terminal.app chokes on large pastes (shell completions, redraw glitches).
-  Use `open -e` with TextEdit for files over ~100 lines.
-- **Always state the `Date` format explicitly** when parsing — never let
-  pandas guess. Silent `NaT` corruption is the classic failure mode.
-- **Season filters use `"2526"`-style codes**, not `"2025/26"`.
-- **Never tune a hyperparameter against the final test season.**
-- **`AS` is a SQL keyword.** Quote it as `"AS"` in DuckDB queries.
+### Backend
 
----
+```bash
+cd ~/Documents/sports-ai/backend
+source ../.venv/bin/activate
+uvicorn app.main:app --reload --port 8000
+Test:
 
-## Suggested next steps
+bash
+curl http://localhost:8000/health
+curl "http://localhost:8000/predict?home=Arsenal&away=Chelsea"
+curl "http://localhost:8000/explain?home=Arsenal&away=Chelsea"
+Frontend
 
-1. **Build the web interface.** FastAPI backend that takes a fixture and
-   returns the full market card. Simple frontend that displays probabilities
-   per match. Uses existing model outputs — no new modelling required.
-2. **Initialize git** (`git init` + commit) so future sessions have real
-   checkpoints instead of relying on a chat transcript.
-3. **Optional: reframe as a value-detection/analytics tool** rather than a
-   betting engine. The honest pitch is "given a fixture, show me the model's
-   probability and compare it to the market," not "find winning bets."
+bash
+cd ~/Documents/sports-ai/frontend
+npm run dev
+Open http://localhost:3000.
 
----
+Rebuilding the master dataset
 
-## Project status
+If you add a new season CSV to data/:
 
-**Modelling: complete and honest.** The pipeline is clean, walk-forward
-validated, benchmarked, and the results are what they are.
 
-**Next: web interface** to make the model usable and visible.
+python combine_data.py
+python audit_data.py
+rm database/sports_ai.duckdb
+python database/setup_database.py
+The backend refits the model on every startup, so no manual retraining is
+required. Just restart uvicorn.
 
----
+Environment variables
 
-*Last updated: after value-detection test on DC X2 confirmed no exploitable
-edge over closing odds.*
+Backend needs a .env at the repo root:
+
+FOOTBALL_DATA_TOKEN=<32-char football-data.org token>
+GROQ_API_KEY=gsk_<groq API key>
+API_FOOTBALL_KEY=<api-football key>   # optional, injuries only
+On Render, these are set via the dashboard's Environment tab — not via a
+committed .env file.
+
+Frontend needs one env var on Vercel:
+
+NEXT_PUBLIC_API_URL=https://sports-ai-backend-dhr2.onrender.com
+Deployment
+
+Service	What	Plan	Notes
+GitHub	Source of truth	Free	Private repo
+Render	FastAPI backend	Free	Sleeps after 15 min idle — UptimeRobot keeps it warm
+Vercel	Next.js frontend	Free	Auto-deploys on push
+Groq	LLM	Free	gpt-oss-120b — 1,000 req/day
+UptimeRobot	Backend pinger	Free	5-min interval prevents Render sleep
+Auto-deploy flow: git push → Render and Vercel both detect the change
+and redeploy. No manual intervention.
+
+Known pitfalls
+
+Do not paste large scripts into Terminal via cat > file <<'PY' ... PY.
+Terminal.app chokes on large pastes. Use open -e with TextEdit.
+Always state the Date format explicitly when parsing — never let
+pandas guess. Silent NaT corruption is the classic failure mode.
+Season filters use "2627"-style codes, not "2026/27".
+Never tune a hyperparameter against the final test season.
+AS is a SQL keyword. Quote it as "AS" in DuckDB queries.
+The free tier of API-Football only covers seasons 2022–2024. Injury
+data for the current season is not available. The code handles this
+gracefully by returning empty injury lists.
+Groq retires models without much notice. The LLM module includes a
+fallback chain — if the first model 404s, it tries the next.
